@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Futuristic PWA</title>
+
+<style>
+:root {
+    --bg: #05070d;
+    --text: #ffffff;
+}
+
+body.light {
+    --bg: #f5f7fa;
+    --text: #111;
+}
+
+body {
+    margin: 0;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Arial, sans-serif;
+}
+
+/* Canvas */
+#futuristic-bg {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+}
+
+/* UI */
+.controls {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+button {
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 10px;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+}
+
+body.light button {
+    background: rgba(255,255,255,0.8);
+    color: black;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="futuristic-bg"></canvas>
+
+<div class="controls">
+    <button id="toggleTheme">🌙</button>
+    <button id="installBtn">📲 Instalar</button>
+</div>
+
+<script>
+/* ======================
+   🌗 TEMA (DARK / LIGHT)
+====================== */
+const toggleBtn = document.getElementById("toggleTheme");
+
+function setTheme(mode) {
+    document.body.classList.toggle("light", mode === "light");
+    localStorage.setItem("theme", mode);
+    toggleBtn.textContent = mode === "light" ? "🌞" : "🌙";
+}
+
+setTheme(localStorage.getItem("theme") || "dark");
+
+toggleBtn.onclick = () => {
+    const isLight = document.body.classList.contains("light");
+    setTheme(isLight ? "dark" : "light");
+};
+
+/* ======================
+   🎨 CANVAS FUTURISTA
+====================== */
+const canvas = document.getElementById('futuristic-bg');
+const ctx = canvas.getContext('2d');
+
+let points = [];
+let mouse = { x: null, y: null };
+
+const CONFIG = {
+    maxDist: 160,
+    maxPoints: 120,
+    interactionRadius: 120
+};
+
+function resizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+
+    canvas.width = innerWidth * dpr;
+    canvas.height = innerHeight * dpr;
+
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.scale(dpr, dpr);
+
+    canvas.style.width = innerWidth + "px";
+    canvas.style.height = innerHeight + "px";
+
+    createPoints();
+}
+
+function createPoints() {
+    points = [];
+
+    const count = Math.min(
+        Math.floor((innerWidth * innerHeight) / 14000),
+        CONFIG.maxPoints
+    );
+
+    for (let i = 0; i < count; i++) {
+        points.push({
+            x: Math.random() * innerWidth,
+            y: Math.random() * innerHeight,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: (Math.random() - 0.5) * 0.5,
+            r: Math.random() * 1.5 + 0.5
+        });
+    }
+}
+
+function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const isLight = document.body.classList.contains("light");
+
+    const dotColor = isLight ? "rgba(0,0,0,0.6)" : "rgba(0,191,255,0.8)";
+    const lineColor = isLight ? "0,0,0" : "0,150,255";
+
+    points.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.x <= 0 || p.x >= innerWidth) p.vx *= -1;
+        if (p.y <= 0 || p.y >= innerHeight) p.vy *= -1;
+
+        if (mouse.x !== null) {
+            const dx = mouse.x - p.x;
+            const dy = mouse.y - p.y;
+            const dist = Math.hypot(dx, dy);
+
+            if (dist < CONFIG.interactionRadius) {
+                p.x -= dx / 60;
+                p.y -= dy / 60;
+            }
+        }
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = dotColor;
+        ctx.fill();
+    });
+
+    for (let i = 0; i < points.length; i++) {
+        for (let j = i + 1; j < points.length; j++) {
+            const dx = points[i].x - points[j].x;
+            const dy = points[i].y - points[j].y;
+            const dist = Math.hypot(dx, dy);
+
+            if (dist < CONFIG.maxDist) {
+                const alpha = (1 - dist / CONFIG.maxDist) * 0.25;
+
+                ctx.strokeStyle = `rgba(${lineColor},${alpha})`;
+                ctx.beginPath();
+                ctx.moveTo(points[i].x, points[i].y);
+                ctx.lineTo(points[j].x, points[j].y);
+                ctx.stroke();
+            }
+        }
+    }
+
+    requestAnimationFrame(animate);
+}
+
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('mousemove', e => mouse = { x: e.clientX, y: e.clientY });
+window.addEventListener('mouseleave', () => mouse = { x: null, y: null });
+
+resizeCanvas();
+animate();
+
+/* ======================
+   📲 BOTÃO INSTALAR
+====================== */
+let deferredPrompt = null;
+const installBtn = document.getElementById("installBtn");
+
+// Sempre visível (para teste em localhost)
+installBtn.style.display = "block";
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+});
+
+installBtn.addEventListener('click', async () => {
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+    } else {
+        alert("PWA não disponível.\nUse localhost (http://) ou HTTPS.");
+    }
+});
+
+/* ======================
+   ⚙️ SERVICE WORKER
+====================== */
+if ('serviceWorker' in navigator) {
+    const swCode = `
+        self.addEventListener('install', e => {
+            self.skipWaiting();
+        });
+
+        self.addEventListener('fetch', e => {
+            e.respondWith(fetch(e.request));
+        });
+    `;
+
+    const blob = new Blob([swCode], { type: 'text/javascript' });
+    const swURL = URL.createObjectURL(blob);
+
+    navigator.serviceWorker.register(swURL);
+}
+
+/* ======================
+   📄 MANIFEST (PWA)
+====================== */
+const manifest = {
+    name: "Futuristic App",
+    short_name: "Futuristic",
+    start_url: ".",
+    display: "standalone",
+    background_color: "#05070d",
+    theme_color: "#05070d",
+    icons: []
+};
+
+const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+const manifestURL = URL.createObjectURL(manifestBlob);
+
+const link = document.createElement("link");
+link.rel = "manifest";
+link.href = manifestURL;
+document.head.appendChild(link);
+</script>
+
+</body>
+</html>
